@@ -489,7 +489,7 @@ from flask import Flask, Response, jsonify, render_template_string, request, sen
 
 CONFIG_FILE = "config.json"
 STATUS = {0: "待发布", 1: "发布中", 2: "发布成功", 3: "失败", 4: "跳过"}
-VERSION = "1.2.0"
+VERSION = "1.2.3"
 REPO_MIRRORS = [
     "https://raw.githubusercontent.com/65ad/xhs-publisher/main/",
     "https://fastly.jsdelivr.net/gh/65ad/xhs-publisher@main/",
