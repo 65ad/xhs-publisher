@@ -632,7 +632,7 @@ def api_windows():
 
 @app.post("/api/windows/create")
 def api_create_windows():
-    """比特上号：批量创建窗口（含代理）"""
+    """比特上号：批量创建窗口（含代理），多方案自动重试"""
     try:
         data = request.json or {}
         fields = data["fields"]
@@ -644,15 +644,38 @@ def api_create_windows():
             accs, ips, data.get("prefix") or "账号_",
             "", data.get("proxy_type", "socks5"), int(data.get("per_ip", 1)))
         ok = fail = 0
+        last_err = ""
         for p in payloads:
-            try:
-                state["bit"]._post("/browser/update", p)
+            # 依次尝试多种参数组合，兼容不同比特浏览器版本
+            variants = []
+            base = dict(p)
+            base.pop("browserFingerPrint", None)          # 方案1: 最简(不指定内核)
+            variants.append(base)
+            v2 = dict(base); v2["browserFingerPrint"] = {"coreVersion": "124"}
+            variants.append(v2)                            # 方案2: 指定内核124
+            v3 = dict(v2)
+            if "proxyType" in v3:
+                v3["proxyType"] = v3["proxyType"].upper()  # 方案3: SOCKS5 大写
+            variants.append(v3)
+            created = False
+            for v in variants:
+                try:
+                    state["bit"]._post("/browser/update", v)
+                    created = True
+                    last_err = ""
+                    break
+                except Exception as e:
+                    last_err = str(e)
+            if created:
                 ok += 1
-            except Exception as e:
+            else:
                 fail += 1
-                log(f"创建窗口[{p['name']}]失败: {e}")
+                log(f"创建窗口[{p['name']}]失败: {last_err}")
         log(f"比特上号: 已创建 {ok} 个窗口，失败 {fail} 个")
-        return jsonify(ok=True, created=ok, failed=fail)
+        if fail and not ok:
+            log("💡 提示: 全部失败。常见原因: ①比特浏览器是网页版/海外版(需本地客户端) "
+                "②比特浏览器版本太旧，请升级客户端 ③分组权限问题")
+        return jsonify(ok=True, created=ok, failed=fail, last_error=last_err)
     except Exception as e:
         return jsonify(ok=False, error=str(e))
 
