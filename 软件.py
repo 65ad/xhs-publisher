@@ -490,8 +490,14 @@ from flask import Flask, Response, jsonify, render_template_string, request, sen
 CONFIG_FILE = "config.json"
 STATUS = {0: "待发布", 1: "发布中", 2: "发布成功", 3: "失败", 4: "跳过"}
 VERSION = "1.2.0"
-REPO_RAW = "https://raw.githubusercontent.com/65ad/xhs-publisher/main/"
-REPO_RAW_BACKUP = "https://cdn.jsdelivr.net/gh/65ad/xhs-publisher@main/"
+REPO_MIRRORS = [
+    "https://raw.githubusercontent.com/65ad/xhs-publisher/main/",
+    "https://fastly.jsdelivr.net/gh/65ad/xhs-publisher@main/",
+    "https://ghfast.top/https://raw.githubusercontent.com/65ad/xhs-publisher/main/",
+    "https://gh-proxy.com/https://raw.githubusercontent.com/65ad/xhs-publisher/main/",
+]
+REPO_RAW = REPO_MIRRORS[0]
+REPO_RAW_BACKUP = REPO_MIRRORS[1]
 
 app = Flask(__name__)
 lock = threading.Lock()
@@ -796,7 +802,7 @@ def api_config():
 @app.get("/api/update/check")
 def api_update_check():
     import requests as _rq
-    for base in (REPO_RAW, REPO_RAW_BACKUP):
+    for base in REPO_MIRRORS:
         try:
             info = _rq.get(base + "version.json", timeout=15).json()
             remote = info.get("version", "")
@@ -821,9 +827,9 @@ def api_update_do():
     tmp_path = self_path + ".new"
     try:
         content = None
-        for base in (REPO_RAW, REPO_RAW_BACKUP):
+        for base in REPO_MIRRORS:
             try:
-                r = _rq.get(base + "软件.py", timeout=30)
+                r = _rq.get(base + "软件.py", timeout=60)
                 if r.ok and len(r.content) > 10000:
                     content = r.content
                     break
