@@ -489,6 +489,9 @@ from flask import Flask, Response, jsonify, render_template_string, request, sen
 
 CONFIG_FILE = "config.json"
 STATUS = {0: "待发布", 1: "发布中", 2: "发布成功", 3: "失败", 4: "跳过"}
+VERSION = "1.2.0"
+REPO_RAW = "https://raw.githubusercontent.com/65ad/xhs-publisher/main/"
+REPO_RAW_BACKUP = "https://cdn.jsdelivr.net/gh/65ad/xhs-publisher@main/"
 
 app = Flask(__name__)
 lock = threading.Lock()
@@ -758,6 +761,57 @@ def api_config():
     return jsonify(ok=True)
 
 
+# ---------------- 在线更新 ----------------
+@app.get("/api/update/check")
+def api_update_check():
+    import requests as _rq
+    for base in (REPO_RAW, REPO_RAW_BACKUP):
+        try:
+            info = _rq.get(base + "version.json", timeout=15).json()
+            remote = info.get("version", "")
+            def vt(v):
+                try: return tuple(int(x) for x in v.split("."))
+                except Exception: return (0, 0, 0)
+            if remote and vt(remote) > vt(VERSION):
+                return jsonify(ok=True, has_update=True,
+                               current=VERSION, latest=remote,
+                               notes=info.get("notes", ""))
+            return jsonify(ok=True, has_update=False, current=VERSION,
+                           latest=remote)
+        except Exception:
+            continue
+    return jsonify(ok=False, error="无法连接更新服务器（检查网络）")
+
+
+@app.post("/api/update/do")
+def api_update_do():
+    import requests as _rq
+    self_path = os.path.abspath(__file__)
+    tmp_path = self_path + ".new"
+    try:
+        content = None
+        for base in (REPO_RAW, REPO_RAW_BACKUP):
+            try:
+                r = _rq.get(base + "软件.py", timeout=30)
+                if r.ok and len(r.content) > 10000:
+                    content = r.content
+                    break
+            except Exception:
+                continue
+        if not content:
+            return jsonify(ok=False, error="下载新版本失败，请检查网络")
+        with open(tmp_path, "wb") as f:
+            f.write(content)
+        os.replace(tmp_path, self_path)   # 覆盖自己
+        return jsonify(ok=True, msg="已更新完成！请关闭本软件并重新启动。")
+    except Exception as e:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+        return jsonify(ok=False, error=str(e))
+
+
 # ---------------- 页面 ----------------
 PAGE = """<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 <title>小红书批量发布助手 · 比特浏览器版</title>
@@ -784,6 +838,7 @@ label{margin-right:8px;font-size:13px} .stat span{margin-right:18px}
   <button class="gray" onclick="loadWindows()">拉取窗口列表</button>
   分组筛选: <input type="text" id="group" style="width:110px">
   <span id="connmsg"></span>
+  <button class="gray" onclick="checkUpdate()">检查更新</button> <span id="updmsg"></span>
 </div></div>
 
 <div class="card"><h2>② 比特上号（解析账号+IP，批量创建窗口）</h2>
@@ -863,6 +918,15 @@ async function doStart(mode){const r=await post('/api/start',{mode:mode||'all',s
 async function saveCfg(){await post('/api/config',{randomize:rnd.checked,schedule:sched.value.split(',').map(s=>s.trim()).filter(Boolean)})}
 sched.addEventListener('change',saveCfg);
 async function doStop(){await post('/api/stop')}
+async function checkUpdate(){updmsg.textContent='检查中…';
+ const c=await fetch('/api/update/check').then(x=>x.json());
+ if(!c.ok){updmsg.textContent='❌ '+c.error;return}
+ if(!c.has_update){updmsg.textContent=`✅ 已是最新版 v${c.current}`;return}
+ if(!confirm(`发现新版本 v${c.latest}（当前 v${c.current}）\\n${c.notes||''}\\n现在更新吗？`))return;
+ updmsg.textContent='下载更新中…';
+ const u=await post('/api/update/do');
+ updmsg.textContent=u.ok?'✅ '+u.msg:'❌ '+u.error;
+ if(u.ok)setTimeout(()=>location.reload(),2000)}
 async function doReset(){await post('/api/reset');refresh()}
 async function editTask(id,field,el){const d={};d.window_id=id;d[field]=el.value;
  if(field==='content')d.title=undefined; await post('/api/task/edit',d)}
