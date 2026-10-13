@@ -659,13 +659,21 @@ def api_create_windows():
             variants.append(v3)
             created = False
             for v in variants:
-                try:
-                    state["bit"]._post("/browser/update", v)
-                    created = True
-                    last_err = ""
+                for attempt in range(5):          # 429限流自动等待重试
+                    try:
+                        state["bit"]._post("/browser/update", v)
+                        created = True
+                        last_err = ""
+                        break
+                    except Exception as e:
+                        last_err = str(e)
+                        if "Too Many Requests" in str(e) or "429" in str(e):
+                            time.sleep(5)          # 触发限流, 等5秒重试
+                        else:
+                            break
+                if created:
                     break
-                except Exception as e:
-                    last_err = str(e)
+            time.sleep(1.2)                        # 每个窗口间隔1.2秒, 防限流
             if created:
                 ok += 1
             else:
