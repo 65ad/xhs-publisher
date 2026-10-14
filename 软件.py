@@ -564,8 +564,12 @@ def run_publish(tasks):
                 log(f"  随机化后标题: {title}")
             open_data = state["bit"].open_browser(t["window_id"])
             time.sleep(3)
+            # 优先用用户填的driver, 否则用比特自带的driverPath
+            drv = cfg.get("driver_path") or (open_data.get("driverPath") or "")
+            if drv:
+                log(f"  使用driver: {drv}")
             res = publish_to_xhs(
-                open_data, cfg.get("driver_path", ""), files,
+                open_data, drv, files,
                 title, content,
                 sel_map=cfg.get("selectors", {}), log=log,
                 wait_upload=cfg.get("wait_upload", 60))
