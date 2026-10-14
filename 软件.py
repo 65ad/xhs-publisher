@@ -489,7 +489,7 @@ from flask import Flask, Response, jsonify, render_template_string, request, sen
 
 CONFIG_FILE = "config.json"
 STATUS = {0: "待发布", 1: "发布中", 2: "发布成功", 3: "失败", 4: "跳过"}
-VERSION = "1.2.4"
+VERSION = "1.2.5"
 REPO_MIRRORS = [
     "https://raw.githubusercontent.com/65ad/xhs-publisher/main/",
     "https://fastly.jsdelivr.net/gh/65ad/xhs-publisher@main/",
@@ -803,6 +803,20 @@ def api_config():
 
 
 # ---------------- 在线更新 ----------------
+@app.get("/api/pick_folder")
+def api_pick_folder():
+    """在本机弹出文件夹选择对话框，返回真实路径（需tkinter，失败则返回空）"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        r = tk.Tk(); r.withdraw(); r.attributes("-topmost", True)
+        p = filedialog.askdirectory(title="选择素材文件夹")
+        r.destroy()
+        return jsonify(ok=True, path=(p or "").replace("/", "\\"))
+    except Exception as e:
+        return jsonify(ok=False, error=str(e))
+
+
 @app.get("/api/update/check")
 def api_update_check():
     import requests as _rq
@@ -905,7 +919,8 @@ label{margin-right:8px;font-size:13px} .stat span{margin-right:18px}
 
 <div class="card"><h2>③ 素材与内容（新建任务时应用）</h2>
 <div class="row">
-素材文件夹: <input type="text" id="media" style="width:330px" placeholder="D:/xhs/素材1">
+素材文件夹: <input type="text" id="media" style="width:300px" placeholder="点击右侧【浏览】按钮选择">
+<button class="gray" onclick="pickFolder('media')">浏览…</button>
 标题: <input type="text" id="title" style="width:260px">
 正文: <input type="text" id="content" style="width:260px">
 上传等待(秒): <input type="number" id="wait" value="60" style="width:60px">
@@ -958,6 +973,12 @@ async function addTasks(){if(!sel.size){alert('请先在上方勾选窗口');ret
 async function doStart(mode){const r=await post('/api/start',{mode:mode||'all',sample_count:2});if(!r.ok)alert(r.error);else alert(mode==='sample'?`已开始试发 ${r.count} 个账号，成功后再点“开始发布”跑全量`:`已开始发布 ${r.count} 个任务`)}
 async function saveCfg(){await post('/api/config',{randomize:rnd.checked,schedule:sched.value.split(',').map(s=>s.trim()).filter(Boolean)})}
 sched.addEventListener('change',saveCfg);
+async function pickFolder(id){const btn=event.target;btn.textContent='弹出中…';
+ const r=await fetch('/api/pick_folder').then(x=>x.json());
+ btn.textContent='浏览…';
+ if(r.ok&&r.path){document.getElementById(id).value=r.path;alert('已选择: '+r.path)}
+ else if(r.ok&&!r.path){}
+ else{alert('无法弹出对话框: '+(r.error||'')+'\n请手动输入路径，例如 D:\\xhspl\\素材1')}}
 async function doStop(){await post('/api/stop')}
 async function checkUpdate(){updmsg.textContent='检查中…';
  const c=await fetch('/api/update/check').then(x=>x.json());
