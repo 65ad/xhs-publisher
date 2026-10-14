@@ -1,1 +1,1 @@
-{"version": "1.2.3", "file": "软件.py", "notes": "新增4个下载镜像,国内网络也能自动更新"}
+{"version": "1.2.4", "file": "软件.py", "notes": "自动使用比特浏览器自带driver,无需手动下载chromedriver"}
